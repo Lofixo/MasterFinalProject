@@ -27,23 +27,19 @@ if __name__ == "__main__":
     opts, _ = getopt.getopt(
         sys.argv[2:], 
         "", 
-        ["picks=", "reduction_vel=", "offset_min=", "offset_max=", "time_min=", "time_max=", "output=", "title="]
+        ["picks=", "reduction_vel=", "output=", "title="]
     )
     opts = {u:v for u, v in opts}
     picks_file = opts.get("--picks", None)
-    offset_min = float(opts["--offset_min"])
-    offset_max = float(opts["--offset_max"])
-    time_min = float(opts["--time_min"])
-    time_max = float(opts["--time_max"])
     RV = float(opts.get("--reduction_vel", 1))
     output_file = str(opts["--output"])
     title = str(opts["--title"])
 
     # endregion
 
-    ########################
-    # region Data processing
-    ########################
+    ######################
+    # region Trace file(s)
+    ######################
 
     # Read trace file
     with segyio.open(filename, strict=False) as f:
@@ -60,6 +56,12 @@ if __name__ == "__main__":
     scaled_wiggles[scaled_wiggles > clip] = clip
     scaled_wiggles[scaled_wiggles < -clip] = -clip
     scaled_wiggles = 1.2 * scaled_wiggles * (offsets[1] - offsets[0]) / np.nanmax(scaled_wiggles)
+
+    # endregion
+
+    ######################
+    # region Picks file(s)
+    ######################
 
     # Read picks file if provided
     if picks_file is not None:
@@ -143,6 +145,48 @@ if __name__ == "__main__":
         
         interpolated_refractions_offset, interpolated_refractions_reduced_time = interpolate_picks(sorted_refractions_offset, sorted_refractions_reduced_time)
         interpolated_reflections_offset, interpolated_reflections_reduced_time = interpolate_picks(sorted_reflections_offset, sorted_reflections_reduced_time)
+
+    # endregion
+
+    ############################
+    # region Compute plot limits
+    ############################
+
+    # Compute time limits
+    time_min = 0    # Default minimum time will always be 0 seconds
+    time_max = 25   # Default maximum time will be 25 seconds, but can be adjusted based on picks if available
+
+    all_interpolated_times = []
+
+    if len(interpolated_refractions_reduced_time) > 0:
+        all_interpolated_times.append(np.max(interpolated_refractions_reduced_time))
+
+    if len(interpolated_reflections_reduced_time) > 0:
+        all_interpolated_times.append(np.max(interpolated_reflections_reduced_time))
+
+    if len(all_interpolated_times) > 0:
+        time_max = max(all_interpolated_times) + 5
+
+    # Compute offset limits
+    offset_min = np.min(offsets) # Default minimum offset will be the minimum offset in the traces, but can be adjusted based on picks if available
+    offset_max = np.max(offsets) # Default maximum offset will be the maximum offset in the traces, but can be adjusted based on picks if available
+
+    all_pick_offsets = []
+
+    if len(interpolated_refractions_offset) > 0:
+        all_pick_offsets.append(np.min(interpolated_refractions_offset))
+        all_pick_offsets.append(np.max(interpolated_refractions_offset))
+
+    if len(interpolated_reflections_offset) > 0:
+        all_pick_offsets.append(np.min(interpolated_reflections_offset))
+        all_pick_offsets.append(np.max(interpolated_reflections_offset))
+
+    if len(all_pick_offsets) > 0:
+        pick_min_offset = min(all_pick_offsets)
+        pick_max_offset = max(all_pick_offsets)
+
+        offset_min = max(offset_min, pick_min_offset - 2)
+        offset_max = min(offset_max, pick_max_offset + 2)
 
     # endregion
 
