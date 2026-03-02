@@ -3,83 +3,91 @@
 # where both filenames start with the same number.
 
 import argparse
+import numpy as np
 import re
+from config import REAL_TIME_SURVEYS
 from pathlib import Path
-
-from processing_segy import read_segy, scale_wiggles
-from processing_picks import read_picks, sort_picks, interpolate_picks
 from plotting import compute_plot_limits, plot_section
+from processing_picks import read_picks, sort_picks, interpolate_picks
+from processing_segy import read_segy, scale_wiggles
 
 
 def leading_number(path: Path):
-    m = re.match(r"^(\d+)", path.name)
-    return m.group(1) if m else None
+    matches = re.match(r"^(\d+)", path.name)
+    return matches.group(1) if matches else None
 
 
-def build_pairs(data_root: Path):
-    """
-    Expected layout:
-      data_root/<survey>/segy/*
-      data_root/<survey>/picks/*
-    """
+def build_segy_picks_pairs(data_path: Path):
     pairs = []
 
-    for survey_dir in sorted([d for d in data_root.iterdir() if d.is_dir()]):
-        segy_dir = survey_dir / "segy"
-        picks_dir = survey_dir / "picks"
+    for survey_directory in sorted([path for path in data_path.iterdir() if path.is_dir()]):
+        segy_directory = survey_directory / "segy"
+        picks_directory = survey_directory / "picks"
 
-        if not segy_dir.exists() or not picks_dir.exists():
+        if not segy_directory.exists() or not picks_directory.exists():
             continue
 
-        segy_files = [p for p in segy_dir.iterdir() if p.is_file()]
-        picks_files = [p for p in picks_dir.iterdir() if p.is_file()]
+        segy_files = [path for path in segy_directory.iterdir() if path.is_file()]
+        picks_files = [path for path in picks_directory.iterdir() if path.is_file()]
 
         segy_map = {}
-        for s in segy_files:
-            key = leading_number(s)
+        for segy_file in segy_files:
+            key = leading_number(segy_file)
             if key is not None:
-                segy_map.setdefault(key, []).append(s)
+                segy_map.setdefault(key, []).append(segy_file)
 
         picks_map = {}
-        for p in picks_files:
-            key = leading_number(p)
+        for picks_file in picks_files:
+            key = leading_number(picks_file)
             if key is not None:
-                picks_map.setdefault(key, []).append(p)
+                picks_map.setdefault(key, []).append(picks_file)
 
         for key in sorted(set(segy_map.keys()) & set(picks_map.keys()), key=int):
             for segy_file in sorted(segy_map[key]):
                 for picks_file in sorted(picks_map[key]):
-                    pairs.append((survey_dir.name, key, segy_file, picks_file))
+                    pairs.append((survey_directory.name, key, segy_file, picks_file))
 
     return pairs
 
 
-def process_pair(segy_file: Path, picks_file: Path, output_file: Path, title: str, rv: float):
+def process_pair(segy_file: Path, picks_file: Path, output_file: Path, title: str, rv: float, survey: str):
     wiggles, offsets, time = read_segy(str(segy_file))
     scaled_wiggles = scale_wiggles(wiggles, offsets)
 
-    picks_data = read_picks(str(picks_file), rv)
+    # For real-time surveys, apply reduction velocity to the wiggle time axis.
+    # We shift each trace's time origin by subtracting |offset|/RV, which is
+    # equivalent to rolling each trace up by that amount of samples.
+    if survey.lower() in REAL_TIME_SURVEYS:
+        dt = time[1] - time[0]
+        shifts = (np.abs(offsets) / rv / dt).astype(int)
+        shifted_wiggles = np.zeros_like(wiggles)
+        for i, shift in enumerate(shifts):
+            if shift < wiggles.shape[1]:
+                shifted_wiggles[i, : wiggles.shape[1] - shift] = wiggles[i, shift:]
+        wiggles = shifted_wiggles
+
+    scaled_wiggles = scale_wiggles(wiggles, offsets)
+
+    picks_data = read_picks(str(picks_file), rv, survey)
     if picks_data is None:
         print(f"[SKIP] No valid picks in file: {picks_file}")
         return False
 
-    ro, rt = sort_picks(
-        picks_data["refractions_offset"],
-        picks_data["refractions_time"]
-    )
-    rlo, rlt = sort_picks(
-        picks_data["reflections_offset"],
-        picks_data["reflections_time"]
-    )
+    ro,  rt  = sort_picks(picks_data["refractions_offset"], picks_data["refractions_time"])
+    rlo, rlt = sort_picks(picks_data["reflections_offset"],  picks_data["reflections_time"])
+    wo,  wt  = sort_picks(picks_data["water_offset"],        picks_data["water_time"])
 
-    iro, irt = interpolate_picks(ro, rt, offsets)
+    iro,  irt  = interpolate_picks(ro,  rt,  offsets)
     irlo, irlt = interpolate_picks(rlo, rlt, offsets)
+    iwo,  iwt  = interpolate_picks(wo,  wt,  offsets)
 
     interpolated_data = {
         "refractions_offset": iro,
-        "refractions_time": irt,
+        "refractions_time":   irt,
         "reflections_offset": irlo,
-        "reflections_time": irlt,
+        "reflections_time":   irlt,
+        "water_offset":       iwo,
+        "water_time":         iwt,
     }
 
     time_min, time_max, offset_min, offset_max = compute_plot_limits(
@@ -90,20 +98,7 @@ def process_pair(segy_file: Path, picks_file: Path, output_file: Path, title: st
         interpolated_data["reflections_time"],
     )
 
-    plot_section(
-        offsets,
-        time,
-        scaled_wiggles,
-        str(output_file),
-        title,
-        rv,
-        time_min,
-        time_max,
-        offset_min,
-        offset_max,
-        picks_data,
-        interpolated_data,
-    )
+    plot_section(offsets, time, scaled_wiggles, str(output_file), title, rv, time_min, time_max, offset_min, offset_max, picks_data, interpolated_data)
     return True
 
 
@@ -139,7 +134,7 @@ if __name__ == "__main__":
     output_dir = Path(args.output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    pairs = build_pairs(data_root)
+    pairs = build_segy_picks_pairs(data_root)
 
     if not pairs:
         print(f"[INFO] No matching SEG-Y + picks pairs found in: {data_root}")
@@ -157,7 +152,7 @@ if __name__ == "__main__":
         title = f"{args.title_prefix} {survey} | {key}".strip()
 
         print(f"[RUN ] {segy_file.name} + {picks_file.name} -> {output_file}")
-        if process_pair(segy_file, picks_file, output_file, title, args.reduction_vel):
+        if process_pair(segy_file, picks_file, output_file, title, args.reduction_vel, survey):
             ok += 1
 
     print(f"[DONE] Generated {ok}/{len(pairs)} plot(s) in: {output_dir}")

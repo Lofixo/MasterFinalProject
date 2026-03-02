@@ -1,7 +1,7 @@
 # SEGY file processing functions, including reading SEGY files and scaling wiggles for visualization
 
-import segyio
 import numpy as np
+import segyio
 from config import QUANTILE_CLIP
 
 def read_segy(filename):
