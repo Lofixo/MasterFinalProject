@@ -1,9 +1,10 @@
 # Picks processing functions, including reading picks from a file, sorting picks by offset, and interpolating picks for trace offsets
 
 import numpy as np
+from pathlib import Path
 from config import INTERPOLATION_THRESHOLD_MULTIPLIER, PICK_TYPES
 
-def read_picks(picks_file, RV, survey):
+def read_picks(picks_file, reduction_velocity, survey):
     valid_picks = []
 
     with open(picks_file, "r") as f:
@@ -18,28 +19,28 @@ def read_picks(picks_file, RV, survey):
     picks_array = np.array(valid_picks, dtype=float)
 
     picks_offset = picks_array[:, 0]
-    picks_time   = picks_array[:, 1]
-    phase        = picks_array[:, 3].astype(int)
+    picks_time = picks_array[:, 1]
+    reduced_picks_time = picks_time - abs(picks_offset) / reduction_velocity
 
-    reduced_time = picks_time - abs(picks_offset) / RV
-
+    phase = picks_array[:, 3].astype(int)
     phase_map = PICK_TYPES.get(survey.lower(), {})
-
     water_mask = np.array([phase_map.get(p) == "Water" for p in phase])
-    rx_mask    = np.array([phase_map.get(p) == "RX"    for p in phase])
-    rf_mask    = np.array([phase_map.get(p) == "RF"    for p in phase])
+    refraction_mask = np.array([phase_map.get(p) == "RX" for p in phase])
+    reflection_mask = np.array([phase_map.get(p) == "RF" for p in phase])
+    if Path(picks_file).name.lower().endswith("phases.dat"): # This kind of file has a different phase mapping, where RX and RF are swapped
+        refraction_mask, reflection_mask = reflection_mask, refraction_mask
 
     # Skip file if no recognised picks at all
-    if not (water_mask.any() or rx_mask.any() or rf_mask.any()):
+    if not (water_mask.any() or refraction_mask.any() or reflection_mask.any()):
         return None
 
     return {
-        "water_offset":      picks_offset[water_mask],
-        "water_time":        reduced_time[water_mask],
-        "refractions_offset": picks_offset[rx_mask],
-        "refractions_time":   reduced_time[rx_mask],
-        "reflections_offset": picks_offset[rf_mask],
-        "reflections_time":   reduced_time[rf_mask],
+        "water_offset": picks_offset[water_mask],
+        "water_time": reduced_picks_time[water_mask],
+        "refractions_offset": picks_offset[refraction_mask],
+        "refractions_time": reduced_picks_time[refraction_mask],
+        "reflections_offset": picks_offset[reflection_mask],
+        "reflections_time": reduced_picks_time[reflection_mask],
     }
 
 

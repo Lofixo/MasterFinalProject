@@ -16,7 +16,7 @@ def compute_plot_limits(offsets, interpolated_refractions_offset, interpolated_r
         all_times.append(np.max(interpolated_reflections_time))
 
     if len(all_times) > 0:
-        time_max = max(all_times) + 5
+        time_max = max(all_times) + 1
 
     offset_min = np.min(offsets)
     offset_max = np.max(offsets)
@@ -41,30 +41,30 @@ def compute_plot_limits(offsets, interpolated_refractions_offset, interpolated_r
     return time_min, time_max, offset_min, offset_max
 
 
-def plot_section(offsets, time, scaled_wiggles, output_file, title, RV, time_min, time_max, offset_min, offset_max, picks_data=None, interpolated_data=None):
+def plot_section(offsets, time, scaled_samples, output_file, title, reduction_velocity, time_min, time_max, offset_min, offset_max, picks_data=None, interpolated_data=None):
     fig, ax = plt.subplots()
 
-    # Plot wiggles
+    # Plot samples as wiggles
     for idx, offset in enumerate(offsets):
         if offset < offset_min or offset > offset_max:
             continue
 
         offset_line = np.zeros(time.size) + offset
-        trace = scaled_wiggles[idx, :] + offset
+        trace = scaled_samples[idx, :] + offset
         ax.fill_betweenx(y=time, x2=offset_line, x1=trace, where=(trace > offset_line), color="k", lw=0)
 
     # Plot picks if available
     if picks_data is not None:
         # Water picks
-        ax.plot(picks_data["water_offset"], picks_data["water_time"], ".", color="magenta", markersize=3, label="Water (original)")
+        # ax.plot(picks_data["water_offset"], picks_data["water_time"], ".", color="magenta", markersize=3, label="Water (original)")
         ax.plot(interpolated_data["water_offset"], interpolated_data["water_time"], ".", color="red", markersize=2, label="Water (interpolated)")
 
         # Refraction picks
-        ax.plot(picks_data["refractions_offset"], picks_data["refractions_time"], ".", color="cyan", markersize=3, label="Refractions (original)")
+        # ax.plot(picks_data["refractions_offset"], picks_data["refractions_time"], ".", color="cyan", markersize=3, label="Refractions (original)")
         ax.plot(interpolated_data["refractions_offset"], interpolated_data["refractions_time"], ".", color="blue", markersize=2, label="Refractions (interpolated)")
 
         # Reflection picks
-        ax.plot(picks_data["reflections_offset"], picks_data["reflections_time"], ".", color="orange", markersize=3, label="Reflections (original)")
+        # ax.plot(picks_data["reflections_offset"], picks_data["reflections_time"], ".", color="orange", markersize=3, label="Reflections (original)")
         ax.plot(interpolated_data["reflections_offset"], interpolated_data["reflections_time"], ".", color="yellow", markersize=2, label="Reflections (interpolated)")
 
         ax.legend(loc="lower right")
@@ -75,7 +75,7 @@ def plot_section(offsets, time, scaled_wiggles, output_file, title, RV, time_min
 
     ax.set_title(title)
     ax.set_xlabel("Distance [km]")
-    ax.set_ylabel(f"Time - Distance / {RV} [sec]")
+    ax.set_ylabel(f"Time - Distance / {reduction_velocity} [sec]")
 
     plt.savefig(output_file, dpi=1200)
     plt.close()

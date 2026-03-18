@@ -1,26 +1,25 @@
-# SEGY file processing functions, including reading SEGY files and scaling wiggles for visualization
+# SEGY file processing functions, including reading SEGY files and scaling samples for visualization
 
 import numpy as np
 import segyio
-from config import QUANTILE_CLIP
 
 def read_segy(filename):
     with segyio.open(filename, strict=False) as f:
         traces = f.trace
-        wiggles = np.stack([traces[i] for i in range(traces.length)])
+        samples = np.stack([traces[i] for i in range(traces.length)])
         offsets = f.attributes(segyio.tracefield.keys["offset"])[:] / 1000
         time_increments = segyio.tools.dt(f) / 1e6
 
-    offset_size, time_size = wiggles.shape
+    offset_size, time_size = samples.shape
     time = np.arange(time_size) * time_increments
 
-    return wiggles, offsets, time
+    return samples, offsets, time
 
 
-def scale_wiggles(wiggles, offsets):
-    scaled = wiggles.copy()
+def scale_samples(samples, offsets):
+    scaled = samples.copy()
 
-    clip = np.nanquantile(wiggles[wiggles > 0], q=QUANTILE_CLIP)
+    clip = np.nanquantile(samples[samples > 0], q=0.8)
     scaled[scaled > clip] = clip
     scaled[scaled < -clip] = -clip
 
