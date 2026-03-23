@@ -1,6 +1,3 @@
-# Surveys where SEGY data is in real time. For these, the reduction velocity will be applied to the wiggle time axis too.
-REAL_TIME_SURVEYS = {"tagus"}
-
 # Pick type mappings per survey
 # Types: "Water", "RX" (refraction), "RF" (reflection), None (ignore)
 PICK_TYPES = {
@@ -42,6 +39,3 @@ PICK_TYPES = {
         5: "RX",
     },
 }
-
-# Interpolation threshold, if the distance between two consecutive picks exceeds this multiplier times the average inter-pick spacing, skip that gap
-INTERPOLATION_THRESHOLD_MULTIPLIER = 5

@@ -2,7 +2,11 @@
 
 import numpy as np
 from pathlib import Path
-from config import INTERPOLATION_THRESHOLD_MULTIPLIER, PICK_TYPES
+from config import PICK_TYPES
+
+# Multiplier for average pick spacing to determine when to allow interpolation across gaps
+INTERPOLATION_THRESHOLD_MULTIPLIER = 5
+
 
 def read_picks(picks_file, reduction_velocity, survey):
     valid_picks = []

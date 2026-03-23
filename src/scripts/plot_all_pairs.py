@@ -6,12 +6,13 @@ import argparse
 import numpy as np
 import re
 import shutil
-from config import REAL_TIME_SURVEYS
+import sys
 from pathlib import Path
+SRC_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(SRC_DIR))
 from plotting import compute_plot_limits, plot_section
 from processing_picks import read_picks, sort_picks, interpolate_picks
 from processing_segy import read_segy, scale_samples
-
 
 def leading_number(path: Path):
     matches = re.match(r"^(\d+)", path.name)
@@ -65,7 +66,7 @@ def process_pair(segy_file: Path, picks_file: Path, output_file: Path, title: st
     # For real-time surveys, apply reduction velocity to the sample time axis.
     # We shift each trace's time origin by subtracting |offset|/RV, which is
     # equivalent to rolling each trace up by that amount of samples.
-    if survey.lower() in REAL_TIME_SURVEYS:
+    if survey.lower() == "tagus":
         time_difference = time[1] - time[0]
         shifts = (np.abs(offsets) / reduction_velocity / time_difference).astype(int)
         shifted_samples = np.zeros_like(samples)
