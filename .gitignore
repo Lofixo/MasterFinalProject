@@ -3,8 +3,8 @@ doubts.txt
 info.txt
 todo.txt
 
-
 # Folders
+.venv/
 data/
 database/
 doubts/

@@ -14,8 +14,8 @@ def read_picks(picks_file, reduction_velocity, survey):
     with open(picks_file, "r") as f:
         for line in f:
             cols = line.strip().split()
-            if len(cols) == 5:
-                valid_picks.append(cols)
+            if len(cols) > 4:
+                valid_picks.append(cols[:5])
 
     if len(valid_picks) == 0:
         return None

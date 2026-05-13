@@ -1,6 +1,8 @@
 # Main script for processing seismic data from SEG-Y files and picks.
-# Batch mode: given a data root, generate one plot per SEG-Y + picks pair
-# where both filenames start with the same number.
+# Batch mode: given a data root, generate one plot per SEG-Y + picks pair where both filenames start with the same number.
+
+# How to run:
+# python .\src\scripts\plot_all_pairs.py --data_directory .\data --output_directory .\outputs --reduction_velocity 8
 
 import argparse
 import numpy as np
@@ -10,9 +12,9 @@ import sys
 from pathlib import Path
 SRC_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SRC_DIR))
-from plotting import compute_plot_limits, plot_section
-from processing_picks import read_picks, sort_picks, interpolate_picks
-from processing_segy import read_segy, scale_samples
+from helpers.plotting import compute_plot_limits, plot_section
+from helpers.processing_picks import read_picks, sort_picks, interpolate_picks
+from helpers.processing_segy import read_segy, scale_samples
 
 def leading_number(path: Path):
     matches = re.match(r"^(\d+)", path.name)

@@ -1,6 +1,20 @@
 # Pick type mappings per survey
 # Types: "Water", "RX" (refraction), "RF" (reflection), None (ignore)
 PICK_TYPES = {
+    "gulf_of_lions": {
+        1: "Water",
+        2: None,
+        3: "RX",
+        4: None,
+        5: None,
+        6: "RF",
+        7: "RX",
+        8: "RX",
+        9: None,
+        10: None,
+        11: None,
+        12: None,
+    },
     "iberia": {
         -1: None,
         0: None,

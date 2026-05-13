@@ -1,3 +1,6 @@
+# How to run:
+# python .\src\scripts\generate_database.py --data_directory .\data --output_directory .\database\database.csv --reduction_velocity 8
+
 import argparse
 import csv
 import numpy as np
@@ -5,9 +8,9 @@ import sys
 from pathlib import Path
 SRC_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SRC_DIR))
-from build_data_pairs import build_segy_picks_pairs
+from helpers.build_data_pairs import build_segy_picks_pairs
 from config import PICK_TYPES
-from processing_segy import read_segy
+from helpers.processing_segy import read_segy
 
 
 def normalize_trace_to_unit_maxabs(trace: np.ndarray, eps: float = 1e-12) -> np.ndarray:
@@ -108,6 +111,29 @@ def find_trace_index_for_offset(trace_offsets: np.ndarray, pick_offset: float):
     idx = int(np.argmin(np.abs(trace_offsets - pick_offset)))
     return idx, float(trace_offsets[idx])
 
+
+def load_obs_depths(survey_dir: Path) -> dict:
+    """
+    Parse obs_depth.in: each line is  OBS_ID  POSITION  DEPTH
+    Returns {int(obs_id): float(depth)}.
+    """
+    depth_file = survey_dir / "obs_depth.in"
+    depths = {}
+    if not depth_file.exists():
+        return depths
+    with depth_file.open("r", encoding="utf-8", errors="ignore") as f:
+        for line in f:
+            cols = line.strip().split()
+            if len(cols) < 3:
+                continue
+            try:
+                obs_id = int(float(cols[0]))
+                depth  = float(cols[2])
+                depths[obs_id] = depth
+            except ValueError:
+                continue
+    return depths
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Generate a wide CSV database from SEG-Y files and their corresponding picks files. Each row corresponds to a single pick and includes the trace samples as columns."
@@ -167,12 +193,12 @@ if __name__ == "__main__":
 
     unique_dts = sorted({round(dt, 9) for dt in source_dts})
     if len(unique_dts) == 1:
-        print(f"[INFO] All SEG-Y files share the same sampling interval: dt={unique_dts[0]:.9f} s")
+        print(f"[INFO] All SEG-Y files share the same sampling interval: dt={unique_dts[0]:.3f} s")
     else:
         print("[WARN] SEG-Y files have different sampling intervals. Resampling to a common target dt.")
         print(f"[WARN] Source dt values (s): {unique_dts}")
 
-    print(f"[INFO] Target sampling interval: dt={target_dt:.9f} s")
+    print(f"[INFO] Target sampling interval: dt={target_dt:.3f} s")
     print(f"[INFO] Database sample columns: {n_samples}")
 
     header = ["REGION", "OBS", "OBS_DEPTH", "RAY_TYPE", "OFFSET"]
@@ -185,7 +211,16 @@ if __name__ == "__main__":
 
         rows_written = 0
 
+        # Pre-load OBS depths per survey
+        obs_depths_cache: dict[str, dict] = {}
+
         for region, obs, segy_file, picks_file in pairs:
+            if region not in obs_depths_cache:
+                survey_dir = data_dir / region
+                obs_depths_cache[region] = load_obs_depths(survey_dir)
+
+            obs_depth = obs_depths_cache[region].get(int(obs), float("nan"))
+
             wiggles, offsets, time = read_segy(str(segy_file))
             source_dt = get_sampling_interval_from_time(time)
 
@@ -197,7 +232,7 @@ if __name__ == "__main__":
                 trace_norm = normalize_trace_to_unit_maxabs(trace_resampled)
                 trace_fixed = pad_or_truncate_trace(trace_norm, n_samples)
 
-                row = [region, obs, float("nan"), ray_type, pick_offset]
+                row = [region, obs, obs_depth, ray_type, pick_offset]
                 row += trace_fixed.tolist()
                 row += [picked_time]
                 writer.writerow(row)
