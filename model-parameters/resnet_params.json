@@ -1,0 +1,5 @@
+{
+  "learning_rate": 0.0005,
+  "lambda_ray": 0.1,
+  "batch_size": 128
+}
